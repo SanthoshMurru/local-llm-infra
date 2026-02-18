@@ -1,0 +1,18 @@
+general_settings:
+  master_key: litellm master key
+  disable_rate_limit: true
+
+model_list:
+  - model_name: gemini-3-pro-preview
+    litellm_params:
+      model: gemini/gemini-3-pro-preview
+      # Ensure GEMINI API KEY is available
+      api_key: "os.environ/GEMINI_API_KEY"
+  - model_name: llama3.2
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: http://ollama:11434
+  - model_name: qwen3-vl
+    litellm_params:
+      model: ollama/qwen3-vl:4b
+      api_base: http://ollama:11434

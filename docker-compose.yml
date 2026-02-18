@@ -1,0 +1,130 @@
+services:
+  # --- ClickHouse Section ---
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-server
+    restart: unless-stopped
+    ports:
+      - "8123:8123" # HTTP
+      - "9000:9000" # Native Client
+    volumes:
+      - ./ch_data:/var/lib/clickhouse
+      - ./ch_logs:/var/log/clickhouse-server
+    environment:
+      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - CLICKHOUSE_PASSWORD=default
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+   
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_KEEP_ALIVE=1h
+    volumes:
+      - ollama_storage:/root/.ollama    
+
+  # --- LiteLLM Proxy Section ---
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml
+    environment:
+      # Set a Master Key for Admin tasks (Key generation, etc.)
+      - MASTER_KEY=sk-1234
+      # Optional: Add a UI password for the LiteLLM Dashboard
+      - UI_USERNAME=<<USER NAME>>
+      - UI_PASSWORD=<<PASSWORD>>
+      - DATABASE_URL=postgresql://default:default@litellm-db:5432/default
+      - STORE_MODEL_IN_DB=True
+      - GEMINI_API_KEY= # OR any other compatible API keys. Can be added to litellm config
+    depends_on:
+      - db
+    command: [ "--config", "/app/config.yaml", "--port", "4000" ]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# 3. The Database: PostgreSQL (Required for UI)
+  db:
+    image: postgres:16
+    container_name: litellm-db    
+    environment:
+      POSTGRES_DB: dfault
+      POSTGRES_USER: default
+      POSTGRES_PASSWORD: default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d litellm_db -U llmadmin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+# ClickHouse MCP Server for NL-to-SQL ---
+  mcp-clickhouse:
+    image: mcp/clickhouse
+    container_name: mcp-clickhouse
+    restart: unless-stopped
+    ports: ["8001:8000"]
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_USER=analytics_ro
+      - CLICKHOUSE_PASSWORD=analytics_ro
+      - CLICKHOUSE_MCP_SERVER_TRANSPORT=sse
+      - CLICKHOUSE_MCP_BIND_HOST=0.0.0.0
+      - CLICKHOUSE_MCP_BIND_PORT=8000
+    depends_on:
+      - clickhouse
+
+  # --- LibreChat Section ---
+  api:
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: librechat-api
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    depends_on:
+      - mongodb
+      - litellm
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml
+      - ./images:/app/client/public/images
+    environment:
+      - ALLOW_REGISTRATION=true
+      - MONGO_URI=mongodb://mongodb:27017/LibreChat
+      - HOST=0.0.0.0
+      - DOMAIN_CLIENT=http://localhost:3080
+      - DOMAIN_SERVER=http://localhost:3080
+      - CONFIG_PATH=/app/librechat.yaml
+      - ALLOW_SOCIAL_LOGIN=true 
+
+  mongodb:
+    image: mongo:latest
+    container_name: chat-mongodb
+    restart: unless-stopped
+    volumes:
+      - ./mongo_data:/data/db
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: chat-meilisearch
+    environment:
+      - MEILI_MASTER_KEY=your_master_key_here
+
+volumes:
+  postgres_data:
+  ollama_storage:

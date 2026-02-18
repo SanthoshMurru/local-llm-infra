@@ -1,0 +1,26 @@
+version: "1.1.0"
+cache: true
+endpoints:
+  custom:
+    - name: "litellm-proxy"
+      apiKey: "master key of litellm"
+      baseURL: "http://litellm:4000/v1"
+      models:
+        default: ["llama3.2"]
+        fetch: true
+    - name: "Custom Agent" # Adding any custom agent
+      apiKey: "API KEY"
+      baseURL: "http://localhost:8080/v1"
+      models:
+        default: ["custom-agent"]
+        featch: false
+      titleConvo: true
+      summarize: false
+      modelDisplayLabel: "Custom Agent"
+
+
+# This enables connecting the MCP Service to Librechat
+mcpServers:
+  clickhouse:
+    type: sse
+    url: "http://mcp-clickhouse:8000/sse"
