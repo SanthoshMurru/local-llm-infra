@@ -1,0 +1,57 @@
+services:
+  openwebui-postgres:
+    image: postgres:16-alpine
+    container_name: openwebui-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openwebui
+      POSTGRES_USER: openwebui
+      POSTGRES_PASSWORD: openwebui
+    volumes:
+      - ./openwebui_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openwebui -d openwebui"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  openwebui-redis:
+    image: redis:7-alpine
+    container_name: openwebui-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./openwebui_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      ENV: prod
+      REDIS_URL: redis://openwebui-redis:6379/0
+      ENABLE_REDIS: "true"
+    depends_on:
+      openwebui-postgres:
+        condition: service_healthy
+      openwebui-redis:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./openwebui_data:/app/backend/data
+    networks:
+      - default
+      - infra_openwebui
+
+networks:
+  infra_openwebui:
+    external: true
+    name: infra_shared
